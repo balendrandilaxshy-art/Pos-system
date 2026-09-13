@@ -15,6 +15,13 @@ app.get('/', (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+// PING (for debugging)
+// ─────────────────────────────────────────────
+app.get('/ping', (req, res) => {
+    res.json({ status: 'alive', time: new Date().toISOString() });
+});
+
+// ─────────────────────────────────────────────
 // PRODUCTS — Full CRUD
 // ─────────────────────────────────────────────
 
@@ -85,7 +92,7 @@ app.delete('/api/products/:id', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// RESERVE STOCK (atomic)
+// RESERVE STOCK (atomic — prevents overselling)
 // ─────────────────────────────────────────────
 async function reserveStock(connection, productId, quantity) {
     const [result] = await connection.query(
@@ -101,7 +108,7 @@ async function reserveStock(connection, productId, quantity) {
 }
 
 // ─────────────────────────────────────────────
-// CHECKOUT
+// CHECKOUT — Reserve stock + create order
 // ─────────────────────────────────────────────
 app.post('/api/checkout', async (req, res) => {
     const { items, idempotencyKey } = req.body;
@@ -113,7 +120,7 @@ app.post('/api/checkout', async (req, res) => {
     try {
         await conn.beginTransaction();
 
-        // Duplicate check
+        // Duplicate order check
         const [existing] = await conn.query(
             'SELECT * FROM orders WHERE idempotency_key = ?',
             [idempotencyKey]
@@ -135,7 +142,7 @@ app.post('/api/checkout', async (req, res) => {
             total += parseFloat(prod[0].price) * item.quantity;
         }
 
-        // Create order with 2-minute expiration based on JS timestamp
+        // Create order with 2-minute expiration
         const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
         const [orderResult] = await conn.query(
             `INSERT INTO orders (status, total, idempotency_key, expires_at)
@@ -164,7 +171,7 @@ app.post('/api/checkout', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// PAYMENTS
+// PAYMENTS — Mock gateway
 // ─────────────────────────────────────────────
 app.post('/api/payments', async (req, res) => {
     const { orderId, outcome, idempotencyKey } = req.body;
@@ -286,7 +293,7 @@ app.get('/api/orders/:id', async (req, res) => {
     }
 });
 
-// ORDERS — Cancel
+// ORDERS — Cancel / Refund
 app.post('/api/orders/:id/cancel', async (req, res) => {
     const conn = await db.getConnection();
     try {
@@ -325,7 +332,7 @@ app.post('/api/orders/:id/cancel', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// AUTO-EXPIRE RESERVED ORDERS
+// AUTO-EXPIRE RESERVED ORDERS (every 30 sec)
 // ─────────────────────────────────────────────
 setInterval(async () => {
     try {
@@ -347,6 +354,8 @@ setInterval(async () => {
     }
 }, 30000);
 
+// ─────────────────────────────────────────────
+// START SERVER
 // ─────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
