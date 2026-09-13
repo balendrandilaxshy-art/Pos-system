@@ -1,6 +1,15 @@
 {
+  "name": "pos-system",
+  "version": "1.0.0",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js"
+  },
   "dependencies": {
     "axios": "^1.20.0",
-    "react-router-dom": "^7.18.3"
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mysql2": "^3.24.4"
   }
 }
